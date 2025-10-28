@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本转语音 (TTS) Web界面</title>
+    <!-- 引入样式文件 -->
+    <link rel="stylesheet" href="/webui/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TTS 语音合成系统</h1>
+        </header>
+
+        <main>
+            <!-- 输入区域 -->
+            <section class="input-section">
+                <h2>文本输入</h2>
+                <div class="input-options">
+                    <div class="input-text-container">
+                        <textarea id="input-text" placeholder="请输入要转换为语音的文本..." rows="4"></textarea>
+                    </div>
+                    <div class="file-upload-container">
+                        <label for="file-upload" class="file-upload-label">
+                            <span>上传文件</span>
+                            <input id="file-upload" type="file" accept=".txt,.csv,.json">
+                        </label>
+                        <span id="file-name" class="file-name">未选择文件</span>
+                        <span class="info-icon" data-tooltip="支持上传 TXT、CSV 和 JSON 文件。若文件包含多行内容，系统会为每行文本单独执行语音合成。">ℹ️</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 参数配置区域 -->
+            <section class="params-section">
+                <h2>语音合成参数</h2>
+                <div class="params-grid">
+                    <!-- 音色选择 -->
+                    <div class="param-group">
+                        <label for="speaker">音色选择:</label>
+                        <!-- 选项将由后端API动态加载 -->
+                        <select id="speaker">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+
+                    <!-- 情绪选择 -->
+                    <div class="param-group">
+                        <label for="emotion">语音情绪:</label>
+                        <!-- 选项将由后端API动态加载 -->
+                        <select id="emotion">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+
+                    <!-- 语速调整 -->
+                    <div class="param-group">
+                        <label for="speed">语速:</label>
+                        <div class="slider-container">
+                            <input type="range" id="speed" min="0.5" max="1.5" value="1.0" step="0.1">
+                            <span id="speed-value">1.0x</span>
+                        </div>
+                    </div>
+
+                    <!-- 其他TTS参数 -->
+                    <div class="param-group">
+                        <label for="temperature">Temperature:
+                            <span class="info-icon" data-tooltip="控制语音生成的随机性。较低的值（如0.5）使语音更稳定但可能单调；较高的值（如1.0）增加多样性但可能不稳定。">ℹ️</span>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="temperature" min="0.5" max="1.0" value="0.85" step="0.05">
+                            <span id="temperature-value">0.85</span>
+                        </div>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="top-k">Top-K:
+                            <span class="info-icon" data-tooltip="限制每个时间步考虑的词汇数量。较低的值（如10）使语音更保守；较高的值（如100）增加多样性。">ℹ️</span>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="top-k" min="10" max="100" value="50" step="10">
+                            <span id="top-k-value">50</span>
+                        </div>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="top-p">Top-P:
+                            <span class="info-icon" data-tooltip="基于概率分布的词汇选择阈值。较低的值（如0.7）使语音更确定；较高的值（如1.0）增加随机性。">ℹ️</span>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="top-p" min="0.7" max="1.0" value="0.8" step="0.05">
+                            <span id="top-p-value">0.8</span>
+                        </div>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="length-penalty">长度惩罚:
+                            <span class="info-icon" data-tooltip="控制生成语音的长度。较低的值（如0.5）生成较短语音但可能不完整；较高的值（如2.0）生成较长语音，但可能导致拖沓。">ℹ️</span> 
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="length-penalty" min="0.5" max="2.0" value="1.0" step="0.1">
+                            <span id="length-penalty-value">1.0</span>
+                        </div>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="repetition-penalty">重复惩罚:
+                            <span class="info-icon" data-tooltip="防止语音重复的惩罚因子。较低的值（如1.0）允许更多重复；较高的值（如3.0）减少重复。">ℹ️</span>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="repetition-penalty" min="1.0" max="3.0" value="2.0" step="0.1">
+                            <span id="repetition-penalty-value">2.0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 噪音混合区域 -->
+            <section id="noise-section" class="params-section">
+                <h2>噪音混合参数</h2>
+                <div class="params-grid">
+                    <!-- 噪音类型选择 -->
+                    <div class="param-group">
+                        <label for="noise-type">噪音类型:</label>
+                        <!-- 选项将由后端API动态加载 -->
+                        <select id="noise-type">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+
+                    <!-- 信噪比选择 -->
+                    <div class="param-group">
+                        <label for="snr">信噪比 (SNR):</label>
+                        <div class="slider-container">
+                            <input type="range" id="snr" min="0" max="20" value="10" step="1">
+                            <span id="snr-value">10 dB</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 操作按钮 -->
+            <section class="actions-section">
+                <button id="synthesize-btn" class="btn-primary">开始合成语音</button>
+                <button id="reset-params-btn" class="btn-secondary">重置参数</button>
+                <button id="clear-btn" class="btn-secondary">清空</button>
+                <button id="cancel-job-btn" class="btn-secondary">取消任务</button>
+            </section>
+            
+            <!-- 处理状态和结果 -->
+            <section class="results-section">
+                <div id="status-message" class="status-message hidden"></div>
+                
+                <div id="processing-time" class="processing-time hidden">
+                    <p>总处理时间: <span id="total-time">0.00</span> 秒</p>
+                </div>
+
+                <!-- 原始音频结果 -->
+                <div id="original-audio-container" class="audio-container hidden">
+                    <h3>语音合成结果</h3>
+                    <div id="original-audio-list" class="audio-list"></div>
+                </div>
+                
+                <!-- 噪音混合音频结果 -->
+                <div id="noise-audio-container" class="audio-container hidden">
+                    <h3>噪音混合结果</h3>
+                    <div id="noise-audio-list" class="audio-list"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+        </footer>
+    </div>
+
+    <!-- 引入JavaScript文件 -->
+    <script src="/webui/app.js"></script>
+</body>
+</html>

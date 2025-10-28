@@ -1,0 +1,81 @@
+data_voice/
+tests/
+output/
+models/
+input/
+# Python virtual environment
+venv/
+env/
+.env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.coverage
+coverage/
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Audio output
+audio_output/
+tmp_audio/
+output/
+# Model files (if large or binary)
+models/
+*.pth
+*.bin
+*.onnx
+
+# Misc
+.cache/
+.temp/
+.tmp/
+
+# WebUI builds
+webui/build/
+webui/dist/
+
+# Flask debug files
+flask_session/
