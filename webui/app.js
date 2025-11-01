@@ -17,6 +17,10 @@ const elements = {
     noiseType: document.getElementById('noise-type'),
     snr: document.getElementById('snr'),
     snrValue: document.getElementById('snr-value'),
+    randomNoise: document.getElementById('random-noise'),
+    randomNoiseCount: document.getElementById('random-noise-count'),
+    randomNoiseCountValue: document.getElementById('random-noise-count-value'),
+    randomNoiseCountGroup: document.getElementById('random-noise-count-group'),
     speed: document.getElementById('speed'),
     speedValue: document.getElementById('speed-value'),
     temperature: document.getElementById('temperature'),
@@ -82,6 +86,22 @@ function setupTooltips() {
 function setupSliderListeners() {
     elements.snr.addEventListener('input', () => {
         elements.snrValue.textContent = `${elements.snr.value} dB`;
+    });
+    
+    // 随机噪声复选框事件
+    elements.randomNoise.addEventListener('change', () => {
+        if (elements.randomNoise.checked) {
+            elements.randomNoiseCountGroup.style.display = 'block';
+            elements.noiseType.disabled = true;
+        } else {
+            elements.randomNoiseCountGroup.style.display = 'none';
+            elements.noiseType.disabled = false;
+        }
+    });
+    
+    // 随机噪声数量滑块
+    elements.randomNoiseCount.addEventListener('input', () => {
+        elements.randomNoiseCountValue.textContent = elements.randomNoiseCount.value;
     });
     
     elements.speed.addEventListener('input', () => {
@@ -450,8 +470,11 @@ function handleSynthesize() {
             
             // 检查是否需要自动进行噪音混合
             const noiseType = elements.noiseType.value;
-            if (noiseType !== 'none') {
-                // 自动进行噪音混合
+            if (elements.randomNoise.checked) {
+                // 如果随机噪声选项被勾选，直接调用随机噪声混合
+                autoMixRandomNoise(data.audio_files, parseInt(elements.snr.value));
+            } else if (noiseType !== 'none') {
+                // 否则进行普通噪音混合
                 autoMixNoise(data.audio_files, noiseType, parseInt(elements.snr.value));
             } else {
                 // 隐藏噪音混合结果
@@ -541,11 +564,99 @@ function autoMixNoise(audioFiles, noiseType, snr) {
     });
 }
 
+// 自动随机噪声混合函数
+function autoMixRandomNoise(audioFiles, snr) {
+    if (!audioFiles || audioFiles.length === 0) {
+        return;
+    }
+    
+    // 显示处理中状态
+    showStatus('正在添加随机噪声，请稍候...', 'processing');
+    
+    const totalFiles = audioFiles.length;
+    let processedCount = 0;
+    const noiseMixedFiles = [];
+    
+    audioFiles.forEach(audioFile => {
+        // 发送随机噪声混合请求
+        fetch('/api/mix-random-noise', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                audio_path: audioFile.path,
+                count: parseInt(elements.randomNoiseCount.value),
+                snr: snr
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            processedCount++;
+            
+            // 添加调试日志
+            console.log('Random noise response:', data);
+            
+            if (data.success && data.noise_mixed_paths && data.noise_mixed_paths.length > 0) {
+                // 优先处理API返回的相对路径
+                data.noise_mixed_paths.forEach((path, index) => {
+                    noiseMixedFiles.push({
+                        path: path,
+                        filename: data.noise_mixed_files ? data.noise_mixed_files[index] : `file_${index+1}.wav`
+                    });
+                });
+            } else if (data.success && data.noise_mixed_files && data.noise_mixed_files.length > 0) {
+                // 处理API返回的文件名数组
+                data.noise_mixed_files.forEach((filename, index) => {
+                    // 构建完整的文件路径
+                    const path = `output/tts_with_noise/${filename}`;
+                    noiseMixedFiles.push({
+                        path: path,
+                        filename: filename
+                    });
+                });
+            } else {
+                // 添加错误日志
+                console.error('Random noise failed:', data);
+                if (!data.success) {
+                    showStatus(`随机噪声混合失败: ${data.error || '未知错误'}`, 'error');
+                }
+            }
+            
+            // 检查是否所有文件都已处理完成
+            if (processedCount === totalFiles) {
+                if (noiseMixedFiles.length > 0) {
+                    showStatus(`成功为 ${noiseMixedFiles.length} 个文件添加随机噪声`, 'success');
+                    displayAudioResults(noiseMixedFiles, elements.noiseAudioList);
+                    elements.noiseAudioContainer.classList.remove('hidden');
+                } else {
+                    showStatus('随机噪声混合失败，请重试', 'error');
+                }
+            }
+        })
+        .catch(error => {
+            processedCount++;
+            console.error('随机噪声混合请求失败:', error);
+            
+            if (processedCount === totalFiles) {
+                showStatus('部分文件随机噪声混合失败', 'error');
+            }
+        });
+    });
+}
+
 // 重置参数到默认值
 function handleResetParams() {
     // 重置滑块参数到默认值
     elements.snr.value = 10;
     elements.snrValue.textContent = '10 dB';
+    
+    // 重置随机噪声选项
+    elements.randomNoise.checked = false;
+    elements.randomNoiseCount.value = 1;
+    elements.randomNoiseCountValue.textContent = '1';
+    elements.randomNoiseCountGroup.style.display = 'none';
+    elements.noiseType.disabled = false;
     
     elements.speed.value = 1.0;
     elements.speedValue.textContent = '1.0x';

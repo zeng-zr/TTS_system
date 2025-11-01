@@ -3,6 +3,7 @@ import csv
 import json
 import logging
 import pandas as pd
+import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -17,6 +18,104 @@ class TextLoader:
     def __init__(self):
         """初始化文本加载器"""
         logger.info("TextLoader initialized")
+    
+    def convert_special_symbols(self, text: str) -> str:
+        """
+        将文本中的特殊符号转换为中文表达
+        
+        Args:
+            text: 原始文本
+            
+        Returns:
+            转换后的文本
+        """
+        # 定义符号到中文的映射
+        symbol_map = {
+            '<': '小于',
+            '＜': '小于',
+            '>': '大于',
+            '＞': '大于',
+            '≤': '小于等于',
+            '≤': '小于等于',
+            '≥': '大于等于',
+            '≥': '大于等于',
+            '=': '等于',
+            '≠': '不等于',
+            '≠': '不等于',
+            '≈': '约等于',
+            '≈': '约等于',
+            '±': '正负',
+            '±': '正负',
+            '×': '乘以',
+            '×': '乘以',
+            '÷': '除以',
+            '÷': '除以',
+            '∞': '无穷大',
+            '∞': '无穷大',
+            '∑': '求和',
+            '∑': '求和',
+            '∏': '求积',
+            '∏': '求积',
+            '∫': '积分',
+            '∫': '积分',
+            '∂': '偏微分',
+            '∂': '偏微分',
+            '∇': '梯度',
+            '∇': '梯度',
+            '√': '平方根',
+            '√': '平方根',
+            '∛': '立方根',
+            '∛': '立方根',
+            '℃': '摄氏度',
+            '℃': '摄氏度',
+            '℉': '华氏度',
+            '℉': '华氏度',
+            '°': '度',
+            '°': '度',
+            '′': '分',
+            '′': '分',
+            '″': '秒',
+            '″': '秒',
+            '％': '百分之',
+            '％': '百分之',
+            '‰': '千分之',
+            '‰': '千分之',
+            '‱': '万分之',
+            '‱': '万分之'
+        }
+        
+        # 处理范围表示，如 "200-500" -> "200到500"
+        text = re.sub(r'(\d+)-(\d+)', r'\1到\2', text)
+        
+        # 替换特殊符号
+        for symbol, replacement in symbol_map.items():
+            text = text.replace(symbol, replacement)
+        
+        # 处理百分比，如 "50%" -> "百分之五十"
+        def replace_percent(match):
+            num = match.group(1)
+            # 如果是整数，尝试转换为中文数字
+            try:
+                if '.' not in num:
+                    # 简单的数字到中文转换，只处理常见情况
+                    num_int = int(num)
+                    chinese_nums = {
+                        0: '零', 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 
+                        6: '六', 7: '七', 8: '八', 9: '九', 10: '十'
+                    }
+                    if num_int in chinese_nums:
+                        return f"百分之{chinese_nums[num_int]}"
+                    # 对于更大的数字，保留阿拉伯数字
+                    return f"百分之{num}"
+                else:
+                    # 小数情况，保留阿拉伯数字
+                    return f"百分之{num}"
+            except ValueError:
+                return f"百分之{num}"
+        
+        text = re.sub(r'(\d+(?:\.\d+)?)%', replace_percent, text)
+        
+        return text
     
     def load_text_file(self, file_path: str, **kwargs) -> List[Dict[str, Any]]:
         """
@@ -65,9 +164,12 @@ class TextLoader:
                 for idx, line in enumerate(f):
                     line = line.strip()
                     if line:
+                        # 转换特殊符号
+                        processed_line = self.convert_special_symbols(line)
                         texts.append({
                             'id': f'{file_name}_{idx}',
-                            'text': line
+                            'text': processed_line,
+                            'original_text': line  # 保留原始文本
                         })
             logger.info(f"Loaded {len(texts)} texts from TXT file")
             return texts
@@ -101,8 +203,11 @@ class TextLoader:
                     
                     text = row[text_column].strip()
                     if text:
+                        # 转换特殊符号
+                        processed_text = self.convert_special_symbols(text)
                         text_dict = {
-                            'text': text
+                            'text': processed_text,
+                            'original_text': text  # 保留原始文本
                         }
                         
                         # 设置ID
@@ -152,8 +257,11 @@ class TextLoader:
             for idx, row in df.iterrows():
                 text = str(row[text_column]).strip()
                 if text and text != 'nan':  # 处理空值
+                    # 转换特殊符号
+                    processed_text = self.convert_special_symbols(text)
                     text_dict = {
-                        'text': text
+                        'text': processed_text,
+                        'original_text': text  # 保留原始文本
                     }
                     
                     # 设置ID
@@ -222,8 +330,11 @@ class TextLoader:
                     
                     text = str(item[text_key]).strip()
                     if text and text != 'nan':
+                        # 转换特殊符号
+                        processed_text = self.convert_special_symbols(text)
                         text_dict = {
-                            'text': text
+                            'text': processed_text,
+                            'original_text': text  # 保留原始文本
                         }
                         
                         # 设置ID

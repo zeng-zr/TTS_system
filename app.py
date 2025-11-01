@@ -256,6 +256,58 @@ def mix_noise_api():
         logger.error(f"Mix noise API error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
+# 处理随机噪音混合请求
+@app.route('/api/mix-random-noise', methods=['POST'])
+def mix_random_noise_api():
+    try:
+        data = request.json
+        
+        # 验证参数
+        if not data or 'audio_path' not in data:
+            return jsonify({'success': False, 'error': '缺少音频文件路径'})
+        
+        audio_path = data['audio_path']
+        snr = data.get('snr', 10)
+        count = data.get('count', 1)  # 默认生成1个随机噪声混合文件
+        
+        # 确保音频文件存在
+        full_audio_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), audio_path)
+        if not os.path.exists(full_audio_path):
+            return jsonify({'success': False, 'error': '音频文件不存在'})
+        
+        # 获取输出目录
+        output_dir = os.path.dirname(full_audio_path)
+        
+        # 执行随机噪音混合并捕获可能的异常
+        try:
+            noise_mixed_files = noise_mixer.mix_random_noise(
+                audio_path=full_audio_path,
+                snr_db=snr,
+                output_dir=output_dir,
+                count=count
+            )
+            
+        except Exception as e:
+            logger.error(f"随机噪音混合过程中出错: {str(e)}")
+            return jsonify({'success': False, 'error': f'随机噪音混合过程中出错: {str(e)}'})
+
+        if not noise_mixed_files:
+            return jsonify({'success': False, 'error': '随机噪音混合失败'})
+        
+        # 获取相对路径
+        rel_paths = [os.path.relpath(file, os.path.dirname(os.path.abspath(__file__))) for file in noise_mixed_files]
+        
+        return jsonify({
+            'success': True,
+            'noise_mixed_paths': rel_paths,
+            'noise_mixed_files': [os.path.basename(file) for file in noise_mixed_files],
+            'count': len(noise_mixed_files)
+        })
+        
+    except Exception as e:
+        logger.error(f"Mix random noise API error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
 # 获取可用的情绪列表
 @app.route('/api/emotions', methods=['GET'])
 def get_emotions():
