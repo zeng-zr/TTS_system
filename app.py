@@ -2,6 +2,8 @@ import os
 import sys
 import logging
 import time
+import zipfile
+import shutil
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from werkzeug.utils import secure_filename
@@ -514,6 +516,193 @@ def get_noise_types():
     except Exception as e:
         logger.error(f"Get noise types error: {str(e)}")
         return jsonify({'success': True, 'noise_types': ['none', 'white', 'pink', 'babble', 'volvo']})
+
+# 处理批量音频文件打包下载请求
+@app.route('/api/batch-download', methods=['POST'])
+def batch_download_api():
+    """批量打包下载音频文件"""
+    try:
+        data = request.json
+        
+        # 验证参数
+        if not data or 'audio_files' not in data:
+            return jsonify({'success': False, 'error': '缺少音频文件列表'})
+        
+        audio_files = data['audio_files']
+        if not isinstance(audio_files, list) or len(audio_files) == 0:
+            return jsonify({'success': False, 'error': '音频文件列表不能为空'})
+        
+        # 创建临时目录用于打包
+        temp_dir = tempfile.mkdtemp()
+        timestamp = get_timestamp()
+        zip_filename = f"audio_batch_{timestamp}.zip"
+        zip_path = os.path.join(temp_dir, zip_filename)
+        
+        try:
+            # 创建ZIP文件
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for i, audio_file in enumerate(audio_files):
+                    # 获取音频文件的完整路径
+                    if isinstance(audio_file, dict):
+                        file_path = audio_file.get('path', '')
+                        original_filename = audio_file.get('filename', '')
+                    else:
+                        file_path = str(audio_file)
+                        original_filename = os.path.basename(file_path)
+                    
+                    if not file_path:
+                        continue
+                    
+                    # 构建完整路径
+                    full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
+                    
+                    # 检查文件是否存在
+                    if not os.path.exists(full_path):
+                        logger.warning(f"音频文件不存在: {full_path}")
+                        continue
+                    
+                    # 生成ZIP中的文件名（避免重名）
+                    if original_filename:
+                        name, ext = os.path.splitext(original_filename)
+                        zip_filename_in = f"{i+1:03d}_{name}{ext}"
+                    else:
+                        zip_filename_in = f"{i+1:03d}_{os.path.basename(file_path)}"
+                    
+                    # 添加文件到ZIP
+                    zipf.write(full_path, zip_filename_in)
+                    logger.info(f"添加文件到ZIP: {full_path} -> {zip_filename_in}")
+            
+            # 检查ZIP文件是否为空
+            if os.path.getsize(zip_path) == 0:
+                return jsonify({'success': False, 'error': '没有有效的音频文件可以打包'})
+            
+            # 创建下载URL
+            download_url = f"/api/download-zip/{zip_filename}"
+            
+            # 返回成功响应
+            return jsonify({
+                'success': True,
+                'download_url': download_url,
+                'zip_filename': zip_filename,
+                'file_count': len(audio_files),
+                'temp_dir': temp_dir  # 返回临时目录，前端下载完成后需要清理
+            })
+            
+        except Exception as zip_error:
+            logger.error(f"创建ZIP文件失败: {str(zip_error)}")
+            # 清理临时文件
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            if os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+            return jsonify({'success': False, 'error': f'创建ZIP文件失败: {str(zip_error)}'})
+            
+    except Exception as e:
+        logger.error(f"Batch download API error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# 提供ZIP文件下载服务
+@app.route('/api/download-zip/<path:filename>')
+def download_zip_file(filename):
+    """下载ZIP文件"""
+    try:
+        # 验证文件名
+        if not filename.endswith('.zip'):
+            return jsonify({'success': False, 'error': '无效的文件类型'})
+        
+        # 查找临时目录中的ZIP文件
+        temp_dirs = [d for d in os.listdir(tempfile.gettempdir()) if d.startswith('tmp')]
+        zip_path = None
+        
+        for temp_dir_name in temp_dirs:
+            temp_dir_path = os.path.join(tempfile.gettempdir(), temp_dir_name)
+            potential_zip_path = os.path.join(temp_dir_path, filename)
+            if os.path.exists(potential_zip_path):
+                zip_path = potential_zip_path
+                break
+        
+        if not zip_path or not os.path.exists(zip_path):
+            return jsonify({'success': False, 'error': 'ZIP文件不存在或已过期'})
+        
+        # 发送文件
+        directory = os.path.dirname(zip_path)
+        return send_from_directory(directory, filename, as_attachment=True)
+        
+    except Exception as e:
+        logger.error(f"Download ZIP error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# 处理整个输出目录打包下载请求
+@app.route('/api/download-output-dir', methods=['POST'])
+def download_output_dir_api():
+    """打包下载整个输出目录"""
+    try:
+        data = request.json
+        
+        # 验证参数
+        if not data or 'output_dir' not in data:
+            return jsonify({'success': False, 'error': '缺少输出目录路径'})
+        
+        output_dir = data['output_dir']
+        if not output_dir:
+            return jsonify({'success': False, 'error': '输出目录路径不能为空'})
+        
+        # 构建完整路径
+        full_output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_dir)
+        
+        # 检查目录是否存在
+        if not os.path.exists(full_output_dir):
+            return jsonify({'success': False, 'error': '输出目录不存在'})
+        
+        if not os.path.isdir(full_output_dir):
+            return jsonify({'success': False, 'error': '输出路径不是目录'})
+        
+        # 创建临时目录用于打包
+        temp_dir = tempfile.mkdtemp()
+        timestamp = get_timestamp()
+        zip_filename = f"output_dir_{timestamp}.zip"
+        zip_path = os.path.join(temp_dir, zip_filename)
+        
+        try:
+            # 创建ZIP文件，包含整个输出目录
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 遍历输出目录中的所有文件
+                for root, dirs, files in os.walk(full_output_dir):
+                    for file in files:
+                        if file.endswith('.wav') or file.endswith('.csv'):  # 只打包音频和元数据文件
+                            file_path = os.path.join(root, file)
+                            # 计算相对路径，保持目录结构
+                            arcname = os.path.relpath(file_path, os.path.dirname(full_output_dir))
+                            zipf.write(file_path, arcname)
+                            logger.info(f"添加文件到ZIP: {file_path} -> {arcname}")
+            
+            # 检查ZIP文件是否为空
+            if os.path.getsize(zip_path) == 0:
+                return jsonify({'success': False, 'error': '输出目录中没有可下载的文件'})
+            
+            # 创建下载URL
+            download_url = f"/api/download-zip/{zip_filename}"
+            
+            # 返回成功响应
+            return jsonify({
+                'success': True,
+                'download_url': download_url,
+                'zip_filename': zip_filename,
+                'output_dir': output_dir
+            })
+            
+        except Exception as zip_error:
+            logger.error(f"创建ZIP文件失败: {str(zip_error)}")
+            # 清理临时文件
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            if os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+            return jsonify({'success': False, 'error': f'创建ZIP文件失败: {str(zip_error)}'})
+            
+    except Exception as e:
+        logger.error(f"Download output dir API error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     webui_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui')

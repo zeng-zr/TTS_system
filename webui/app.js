@@ -7,6 +7,9 @@ let currentAbortController = null;
 // 跟踪当前是否正在进行合成
 let isSynthesizing = false;
 
+// 存储当前输出目录
+let currentOutputDir = null;
+
 // DOM元素引用
 const elements = {
     inputText: document.getElementById('input-text'),
@@ -37,7 +40,8 @@ const elements = {
     originalAudioContainer: document.getElementById('original-audio-container'),
     originalAudioList: document.getElementById('original-audio-list'),
     noiseAudioContainer: document.getElementById('noise-audio-container'),
-    noiseAudioList: document.getElementById('noise-audio-list')
+    noiseAudioList: document.getElementById('noise-audio-list'),
+    batchDownloadAll: document.getElementById('batch-download-all')
 };
 
 // 初始化页面
@@ -153,6 +157,7 @@ function setupButtonListeners() {
     elements.resetParamsBtn.addEventListener('click', handleResetParams);
     elements.clearBtn.addEventListener('click', handleClear);
     elements.cancelJobBtn.addEventListener('click', handleCancel);
+    elements.batchDownloadAll.addEventListener('click', handleBatchDownloadAll);
 }
 
 // 设置文件上传事件监听
@@ -456,6 +461,7 @@ function handleSynthesize() {
         if (data.success) {
             // 保存结果
             currentResults = data;
+            currentOutputDir = data.output_dir; // 保存输出目录路径
             
             // 显示成功状态
             showStatus(`成功合成 ${data.success_count} 个语音文件`, 'success');
@@ -748,6 +754,7 @@ function handleClear() {
     
     // 重置结果
     currentResults = null;
+    currentOutputDir = null; // 清空输出目录
     
     // 重置取消相关状态
     isSynthesizing = false;
@@ -840,6 +847,100 @@ function displayAudioResults(audioFiles, container) {
         // 添加到容器
         container.appendChild(audioItem);
     });
+}
+
+// 批量下载原始音频
+async function handleBatchDownloadOriginal() {
+    if (!currentResults || !currentResults.original || currentResults.original.length === 0) {
+        showStatus('没有可下载的原始音频文件', 'error');
+        return;
+    }
+    
+    try {
+        // 禁用按钮并显示处理状态
+        elements.batchDownloadOriginal.disabled = true;
+        showStatus('正在打包原始音频文件...', 'processing');
+        
+        // 准备音频文件列表
+        const audioFiles = currentResults.original.map(file => ({
+            path: file.path,
+            filename: file.filename
+        }));
+        
+        // 调用批量下载API
+        const response = await fetch('/api/batch-download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ audio_files: audioFiles })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // 创建下载链接
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/api/download-zip/${data.zip_filename}`;
+            downloadLink.download = `original_audio_batch_${data.zip_filename}`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showStatus('原始音频打包下载完成', 'success');
+        } else {
+            showStatus(`打包下载失败: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('批量下载请求失败:', error);
+        showStatus('批量下载请求失败，请检查网络连接', 'error');
+    } finally {
+        elements.batchDownloadOriginal.disabled = false;
+    }
+}
+
+// 批量下载整个输出目录
+async function handleBatchDownloadAll() {
+    if (!currentOutputDir) {
+        showStatus('没有可下载的输出目录', 'error');
+        return;
+    }
+    
+    try {
+        // 禁用按钮并显示处理状态
+        elements.batchDownloadAll.disabled = true;
+        showStatus('正在打包输出目录...', 'processing');
+        
+        // 调用输出目录下载API
+        const response = await fetch('/api/download-output-dir', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ output_dir: currentOutputDir })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // 创建下载链接
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/api/download-zip/${data.zip_filename}`;
+            downloadLink.download = `output_directory_${data.zip_filename}`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showStatus('输出目录打包下载完成', 'success');
+        } else {
+            showStatus(`打包下载失败: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('批量下载请求失败:', error);
+        showStatus('批量下载请求失败，请检查网络连接', 'error');
+    } finally {
+        elements.batchDownloadAll.disabled = false;
+    }
 }
 
 // 页面加载完成后初始化
